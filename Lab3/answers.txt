@@ -1,0 +1,4 @@
+2) Best tracking appeared to be at point 4 (the sign). This is most likely due to the fact that it is the
+most unique sub-image in the frame, as in the other points all have areas in the frame that they match with (i.e multiple windows in frame).
+
+3) When a template is matched correctly we are seeing correlation scores approximately 0.64.
