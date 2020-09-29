@@ -123,7 +123,7 @@ def question_4():
         labels_black_display = cv2.normalize(src = labels_black_image, dst= None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
         
         # Find CCC
-        centrod_image = cv2.cvtColor(binary_image, cv2.COLOR_GRAY2BGR)
+        centrod_image = frame
         for white_stat, white_centroid in zip(white_stats, white_centroids):
             white_x, white_y = white_centroid
             # print(white_x, white_y)
@@ -147,7 +147,7 @@ def question_4():
                             centrod_image = cv2.rectangle(img=centrod_image, pt1=(x0_black,y0_black), pt2=(x0_black+width_black, y0_black+height_black), color=(0,255,0), thickness=1)
 
 
-        cv2.putText(frame, "Frame: {}".format(str(frame_number)), (50,50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
+        cv2.putText(centrod_image, "Frame: {}".format(str(frame_number)), (50,50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
         cv2.imshow("Video", frame)
         cv2.imshow("Threshold", binary_image)
         cv2.imshow("Filtered", filtered_image)
@@ -158,13 +158,13 @@ def question_4():
         frame_number+=1
 
         # Save to video
-        videoWriter.write(frame)
+        videoWriter.write(centrod_image)
 
         cv2.waitKey(30)
     videoWriter.release()
 
 def main():
-    #question_2()
+    # question_2()
     question_4()
 
 if __name__ == "__main__":
