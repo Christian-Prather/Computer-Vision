@@ -2,14 +2,17 @@ import cv2
 import numpy as np
 from order_targets import order_targets
 
+# Finds Euclidian distance of points
 def distance(point_a, point_b):
     return np.sqrt((point_b[0]-point_a[0])**2 + (point_b[1]-point_a[1])**2)
 
+# Find CCC function pulled from past HW submission
 def find_CCC():
 
     centroids_locations = []
     frame = cv2.imread("CCCtarget.jpg")
 
+    # Morph Configs
     kernel_size_black = 1
     kernel_size_white = 1
     kernel_black = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size_black, kernel_size_black))
@@ -20,8 +23,7 @@ def find_CCC():
     gray_image = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     # Otsu's Algorithm thresholding
     threshold, binary_image = cv2.threshold(gray_image, thresh=0, maxval=255, type=cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    # binary_image = cv2.adaptiveThreshold(src=gray_image, maxValue = 255, adaptiveMethod = cv2.ADAPTIVE_THRESH_MEAN_C, thresholdType = cv2.THRESH_BINARY, blockSize = 51, C= -10)
-    # threshold = 300
+   
     # Filtered image
     filtered_image = cv2.morphologyEx(binary_image, cv2.MORPH_OPEN, kernel_white)
     filtered_image = cv2.morphologyEx(filtered_image, cv2.MORPH_CLOSE, kernel_white)
@@ -67,55 +69,66 @@ def find_CCC():
                         if(black_stat[cv2.CC_STAT_AREA] < 400):
                             centrod_image = cv2.rectangle(img=centrod_image, pt1=(x0_black,y0_black), pt2=(x0_black+width_black, y0_black+height_black), color=(0,255,0), thickness=1)
                             print("Area", black_stat[cv2.CC_STAT_AREA])
-                            centroids_locations.append([x0_black,y0_black])
+                            # Append center of centroid to list
+                            centroids_locations.append(np.array([(x0_black + 0.5*width_black) ,(y0_black + 0.5*height_black)]))
 
+    #Debugging Tools
     # cv2.imshow("Input", frame)
     # cv2.imshow("Threshold", binary_image)
     # cv2.imshow("Filtered", filtered_image)
     # cv2.imshow("White Labels", labels_white_display)
     # cv2.imshow("Black Labels", labels_black_display)
     # cv2.imshow("Final", centrod_image)
-    print(centroids_locations)
-    # ordered_centroids = order_targets(centroids_locations)
-    # if (len(ordered_centroids) < 5):
-    #     print("Error ordering Centroids...")
-    #     exit()
-    ordered_centroids = np.array([
-        [343, 179], 
-        [360,162], 
-        [379,145], 
-        [364,200], 
-        [401,165]], dtype=np.float32)
+    # print(centroids_locations)
+    # print()
+    ordered_centroids = order_targets(centroids_locations)
+    # print(ordered_centroids)
+    image_points = np.asarray(ordered_centroids, dtype=np.float32)
+    # print(image_points)
+    # print(image_points.shape)
+    # Make sure ordering worked
+    if (len(ordered_centroids) < 5):
+        print("Error ordering Centroids...")
+        exit()
+    # Print ordered labels
+    for i in range(len(ordered_centroids)):
+        point = (int(ordered_centroids[i][0]), int(ordered_centroids[i][1]))
+        print(point)
+        cv2.putText(frame, str(i), point, cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255,0,0), 1, cv2.LINE_AA)
+
     model_points = np.array([[0,0,1],[3.7,0,1], [7.4,0,1], [0,4.55,1], [7.4,4.55,1]], dtype=np.float32)
-    # N = model_points.shape[1]
-    print(model_points.shape)
-    print(ordered_centroids.shape)
+
+    # Intrinsics
     f = 531.0
     cx = 320.0
     cy = 240.0
     K = np.array(((f, 0.0, cx), (0.0, f, cy), (0.0, 0.0, 1.0)))
 
-    isPoseFound, rvec, tvec = cv2.solvePnP(objectPoints=model_points, imagePoints=ordered_centroids, cameraMatrix = K, distCoeffs = None)
+    # Pose calculations
+    isPoseFound, rvec, tvec = cv2.solvePnP(objectPoints=model_points, imagePoints=image_points, cameraMatrix = K, distCoeffs = None)
     pImg, Jacobian = cv2.projectPoints(objectPoints=model_points, rvec = rvec, tvec = tvec, cameraMatrix = K, distCoeffs = None)
 
+    # Axis plotting (referenced slides)
     W = np.amax(model_points, axis=0)
     L = np.linalg.norm(W)
     d = L/5
 
     pImg = pImg.reshape(-1,2)
     cv2.line(frame, tuple(np.int32(pImg[0])),
-             tuple(np.int32(pImg[1])), (0, 0, 255), 3)  # x
+             tuple(np.int32(pImg[1])), (0, 0, 255), 2)  # x
     cv2.line(frame, tuple(np.int32(pImg[0])),
-             tuple(np.int32(pImg[2])), (0, 255, 0), 3)  # y
+             tuple(np.int32(pImg[2])), (0, 255, 0), 2)  # y
     cv2.line(frame, tuple(np.int32(pImg[0])),
-             tuple(np.int32(pImg[3])), (255, 0, 0), 3)  # z
+             tuple(np.int32(pImg[3])), (255, 0, 0), 2)  # z
 
 
+    # Translation and Rotation values (vectors)
     cv2.putText(frame, "rvec :{}".format(rvec), (50,400), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1, cv2.LINE_AA)
     cv2.putText(frame, "tvec :{}".format(tvec), (50,450), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1, cv2.LINE_AA)
 
+    #Show frame wait for input
     cv2.imshow("POSE", frame)
-
+    cv2.imwrite("Lab6_output.png", frame)
     cv2.waitKey(0)
 
 def main():
