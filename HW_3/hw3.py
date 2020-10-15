@@ -94,12 +94,15 @@ def find_CCC(frame, frame_number):
 
     # print(centroids_locations)
     # print()
-    # ordered_centroids = order_targets(centroids_locations)
+    ordered_centroids = order_targets(centroids_locations)
     # print(ordered_centroids)
-    # image_points = np.asarray(ordered_centroids, dtype=np.float32)
+    image_points = np.asarray(ordered_centroids, dtype=np.float32)
     # print(image_points)
     # print(image_points.shape)
     # Make sure ordering worked
+    if (len(ordered_centroids) != 5):
+        print("Error ordering Centroids...")
+        exit()
 
 
 def main():
