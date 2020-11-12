@@ -1,12 +1,24 @@
 import cv2
 import numpy as np
-FINAL_IMAGE_WIDTH = 2000
+import os
+
+FINAL_IMAGE_WIDTH = 6000
 FINAL_IMAGE_HEIGHT = 500
-MIN_MATCHES_NEEDED = 10
+MIN_MATCHES_NEEDED = 20
 QUARY_DIR = "images"
 
 
+def create_named_window(window_name, image):
+    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+    h = image.shape[0]
+    w = image.shape[1]
 
+    WIN_MAX_SIZE = 1500
+    if max(w,h) > WIN_MAX_SIZE:
+        scale = WIN_MAX_SIZE / max(w,h)
+    else:
+        scale = 1
+    cv2.resizeWindow(winname = window_name, width = int(w * scale), height = int(h * scale))
 
 def calc_homography_transformation(mathces_in_subset, kp_train, kp_query):
     if len(mathces_in_subset) < MIN_MATCHES_NEEDED:
@@ -32,7 +44,7 @@ def calc_homography_transformation(mathces_in_subset, kp_train, kp_query):
     return H
 
 def detect_features(image, show_features=False):
-    detector = cv2.ORB_create(nfeatures=3000)
+    detector = cv2.ORB_create(nfeatures=3500)
     gray_scale = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     keypoints, descriptors = detector.detectAndCompute(gray_scale, mask=None)
 
@@ -42,7 +54,7 @@ def detect_features(image, show_features=False):
 
 
 def findBaseHomography():
-    color_image1 = cv2.imread("mural01.jpg")
+    color_image1 = cv2.imread("{}/mural01.jpg".format(QUARY_DIR))
     source_points = np.array([[153,118],[383,68], [23,480], [308,504]])
     ortho_points = np.array([[50,50], [369,50], [50, 486], [369,486]])
     display_image = color_image1.copy()
@@ -54,44 +66,60 @@ def findBaseHomography():
 
 
     image_1_ortho = cv2.warpPerspective(color_image1, H1, (FINAL_IMAGE_WIDTH,FINAL_IMAGE_HEIGHT))
+    create_named_window("Warped Image", image_1_ortho)
     # cv2.imshow("Source Points", display_image)
     cv2.imshow("Warped Image", image_1_ortho)
     return H1
 
 def main():
+    warped_images = []
     homography_previous_2_mosaic = findBaseHomography()
-    
-    prior_image = cv2.imread("mural01.jpg")
-    current_image = cv2.imread("mural02.jpg")
+    prior = "01".zfill(2)
+    for i in range(2, 13):
+        # if file != "mural01.jpg":
+        file_name = str(i).zfill(2)
+        prior_image = cv2.imread("{}/mural{}.jpg".format(QUARY_DIR, prior))
+        current_image = cv2.imread("{}/mural{}.jpg".format(QUARY_DIR, file_name))
 
-    kp_train, desc_train = detect_features(current_image, show_features=False)
-    kp_query, desc_query = detect_features(prior_image, show_features=False)
+        kp_train, desc_train = detect_features(current_image, show_features=False)
+        kp_query, desc_query = detect_features(prior_image, show_features=False)
 
-    match = cv2.BFMatcher.create(cv2.NORM_L2)
-    matches = match.knnMatch(desc_query, desc_train, k = 2)
-    
-    valid = []
-    for m,n in matches:
-        if m.distance < 0.9 * n.distance:
-            valid.append(m)
+        match = cv2.BFMatcher.create(cv2.NORM_L2)
+        matches = match.knnMatch(desc_query, desc_train, k = 2)
 
-    homography_current_2_previous = calc_homography_transformation(valid, kp_train, kp_query)
-    # matches = [matches[i] for i in range(len(matches)) if inliners[i] == 1]
-    image2_ortho = cv2.warpPerspective(current_image, homography_current_2_previous, (FINAL_IMAGE_WIDTH, FINAL_IMAGE_HEIGHT))        
-    cv2.imshow("Second", image2_ortho)
-    
-    # To mosaic
-    homography_current_2_mosaic = np.dot( homography_previous_2_mosaic, homography_current_2_previous)
-    image2_mosaic = cv2.warpPerspective(current_image, homography_current_2_mosaic, (FINAL_IMAGE_WIDTH, FINAL_IMAGE_HEIGHT))
+        # prior_image = cv2.imread("mural01.jpg")
+        # current_image = cv2.imread("mural02.jpg")
 
-    cv2.imshow("Image2 Mosaic", image2_mosaic)
-    
-    
-    
-    
-    cv2.waitKey(0)
+        valid = []
+        for m,n in matches:
+            if m.distance < 0.8 * n.distance:
+                valid.append(m)
+
+        homography_current_2_previous = calc_homography_transformation(valid, kp_train, kp_query)
+        
+        # To mosaic
+        homography_current_2_mosaic = np.dot( homography_previous_2_mosaic, homography_current_2_previous)
+        image_mosaic = cv2.warpPerspective(current_image, homography_current_2_mosaic, (FINAL_IMAGE_WIDTH, FINAL_IMAGE_HEIGHT))
+        warped_images.append(image_mosaic)
+        print("Prior {} Current {}".format(prior, file_name))
+
+        # Update prior variables
+        homography_previous_2_mosaic = homography_current_2_mosaic
+        prior = file_name
+        create_named_window("Image Mosaic {}".format(file_name), image_mosaic)
+        cv2.imshow("Image Mosaic {}".format(file_name), image_mosaic)
+        cv2.waitKey(0)
 
 
+    # counter = 1
+    # for image in warped_images:
+    #     cv2.imshow("Image {}".format(counter), image)
+    #     counter+=1
+    
+    # cv2.waitKey(0)
+
+    # Stich all images together
+    
 
 if __name__ == "__main__":
     main()
