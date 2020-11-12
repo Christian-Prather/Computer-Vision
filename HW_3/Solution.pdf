@@ -1,0 +1,11 @@
+This was a fairly straightforward approach. I utilized multiple past assignments.
+Step1) Find CCC this took some tuning and is still not great near the end of the video my frames detector loses the CCC in a few frames as I had to 
+        tune pretty aggressively to remove false positives as they would not allow pose to be ran correctly
+Step 2) Find the pose this was easy as I had this code broken out into functions in the past assignment
+Step 3) Map the image, this was the hardest as I had a hard time using the poly mask as I had not completed Lab 5
+        I eventually got it to work and was able to first remove the area from CCC 1-4 in the target image and then use a bitwise_or to fill the mask/target image
+        This worked because I made a matching projection image from my new image and resize it to match my target image size
+Step 4) Display all appropriate info to the screen this was again easy as it was code used in past assignments
+
+Video Link:
+https://drive.google.com/file/d/10jq7OOStmScWSFeNd02lA3owNesjqxST/view?usp=sharing

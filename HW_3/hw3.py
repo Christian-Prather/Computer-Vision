@@ -8,9 +8,86 @@ can_read, frame = video_capture.read()
 if not can_read:
     print("Error reading file check path and format")
     sys.exit()
+# Save video
 fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
-videoWriter = cv2.VideoWriter("fiveCCC_output.avi", fourcc=fourcc, fps=30.0, frameSize=(641, 481))
+videoWriter = cv2.VideoWriter("hw3_output.avi", fourcc=fourcc, fps=30.0, frameSize=(int(video_capture.get(3)), int(video_capture.get(4))))
 
+# Global defines for the points and input image
+model_points = np.array([[0,0,1],[3.7,0,1], [7.4,0,1], [0,4.55,1], [7.4,4.55,1]], dtype=np.float32)
+bgr_image = cv2.imread("naked_mole_rat.jpg")
+input_image_height = bgr_image.shape[0]
+input_image_width = bgr_image.shape[1]
+# Coordinates of new image to use for mapping to CCC video
+coordinates = [(0,0), (input_image_width/2, 0), (input_image_width, 0), (0, input_image_height), (input_image_width, input_image_height)]
+
+
+
+# Intrinsics
+f = 531.0
+cx = 320.0
+cy = 240.0
+K = np.array(((f, 0.0, cx), (0.0, f, cy), (0.0, 0.0, 1.0)))
+def pose(frame, image_points):
+
+    # Pose calculations
+    isPoseFound, rvec, tvec = cv2.solvePnP(objectPoints=model_points, imagePoints=image_points, cameraMatrix = K, distCoeffs = None)
+    pImg, Jacobian = cv2.projectPoints(objectPoints=model_points, rvec = rvec, tvec = tvec, cameraMatrix = K, distCoeffs = None)
+
+    # Axis plotting (referenced slides)
+    W = np.amax(model_points, axis=0)
+    L = np.linalg.norm(W)
+    d = L/5
+
+    pImg = pImg.reshape(-1,2)
+    cv2.line(frame, tuple(np.int32(pImg[0])),
+            tuple(np.int32(pImg[1])), (0, 0, 255), 2)  # x
+    cv2.line(frame, tuple(np.int32(pImg[0])),
+            tuple(np.int32(pImg[2])), (0, 255, 0), 2)  # y
+    cv2.line(frame, tuple(np.int32(pImg[0])),
+            tuple(np.int32(pImg[3])), (255, 0, 0), 2)  # z
+
+
+    # Translation and Rotation values (vectors)
+    cv2.putText(frame, "rvec :{}".format(rvec), (50,400), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1, cv2.LINE_AA)
+    cv2.putText(frame, "tvec :{}".format(tvec), (50,450), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1, cv2.LINE_AA)
+
+    #Show frame wait for input
+    # cv2.imshow("POSE", frame)
+def createNamedWindow(window_name, image):
+    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+    h = image.shape[0]
+    w = image.shape[1]
+
+    WIN_MAX_SIZE = 1000
+    if max(w,h) >WIN_MAX_SIZE:
+        scale = WIN_MAX_SIZE/max(w,h)
+    else:
+        scale = 1
+    cv2.resizeWindow(winname=window_name, width=int(w * scale), height = int(h * scale))
+
+# Mouse callback function. Appends the x,y location of mouse click to a list.
+def get_xy(event, x, y, flags, param):
+    if event == cv2.EVENT_LBUTTONDOWN:
+        print(x, y)
+        param.append((x, y))
+
+def warpImage(frame, image_points):
+    # Use the coordinates of new image for projecting
+    coor_points = np.asarray(coordinates, dtype=np.float32)
+
+    # Find the projections
+    H_0_1, _ = cv2.findHomography(coor_points, image_points, cv2.RANSAC)
+    bgr_output = cv2.warpPerspective(bgr_image, H_0_1, (frame.shape[1], frame.shape[0]))
+
+    # Zero out where the new image will be placed on the original
+    fill_points = np.asarray([image_points[0], image_points[2], image_points[4], image_points[3]], dtype= np.float32)
+    print(fill_points)
+    cv2.fillConvexPoly(frame, fill_points.astype(int), 0)
+
+    # Make sure both images are same size
+    bgr_output = cv2.resize(bgr_output, (frame.shape[1], frame.shape[0]))
+    overlay = cv2.bitwise_or(frame, bgr_output)
+    return overlay
 
 # Finds Euclidian distance of points
 def distance(point_a, point_b):
@@ -84,9 +161,8 @@ def find_CCC(frame, frame_number):
                             centroids_locations.append(np.array([(x0_black + 0.5*width_black) ,(y0_black + 0.5*height_black)]))
                             areas.append(black_stat[cv2.CC_STAT_AREA])
                             points.append(((x0_black,y0_black), (x0_black+width_black, y0_black+height_black)))
-    #Area filtering (needed due to issue with ccc false positives) 
+    # Area filtering (needed due to issue with ccc false positives) 
     # Reference https://medium.com/datadriveninvestor/finding-outliers-in-dataset-using-python-efc3fce6ce32
-    
     if len(centroids_locations) > 5:
         indexs = []
         print(len(areas))
@@ -104,44 +180,43 @@ def find_CCC(frame, frame_number):
         for index in indexs:
             _= centroids_locations.pop(index)
             _ = points.pop(index)
-    print("P {} C {}".format(len(points), len(centroids_locations)))
-    # for point in points:
-    #     centrod_image = cv2.rectangle(img=centrod_image, pt1=point[0], pt2=point[1], color=(0,255,0), thickness=1)
-
-    #Debugging Tools
+    # print("P {} C {}".format(len(points), len(centroids_locations)))
+    # Debugging Tools
     # cv2.imshow("Input", frame)
     # cv2.imshow("Threshold", binary_image)
     # cv2.imshow("Filtered", filtered_image)
     # cv2.imshow("White Labels", labels_white_display)
     # cv2.imshow("Black Labels", labels_black_display)
     cv2.putText(centrod_image, "Frame: {}".format(str(frame_number)), (50,50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
- 
 
-    # print(centroids_locations)
-    # print()
+    # order targets
     ordered_centroids = order_targets(centroids_locations)
-    print(ordered_centroids)
-
+    # print(ordered_centroids)
+    # Center points
     for point in ordered_centroids:
-        print("Point", point[0])
+        # print("Point", point[0])
         centrod_image = cv2.rectangle(img=centrod_image, pt1=(int(point[0]) - 10, int(point[1]) -10), pt2=( int(point[0]) + 10, int(point[1]) + 10), color=(0,255,0), thickness=1)
     # print(ordered_centrods)
     image_points = np.asarray(ordered_centroids, dtype=np.float32)
-    # print(image_points)
-    # print(image_points.shape)
-    # Make sure ordering worked
-    # if (len(ordered_centroids) != 5):
-    #     print("Error ordering Centroids...{}".format(len(ordered_centroids)))
-    #     exit()
-     # Print ordered labels
+    
     for i in range(len(ordered_centroids)):
         point = (int(ordered_centroids[i][0]), int(ordered_centroids[i][1]))
         # print(point)
         cv2.putText(centrod_image, str(i), point, cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,0,0), 1, cv2.LINE_AA)
-
+    # If there are enough found CCC in frame fun projection
+    if len(image_points) == 5:
+        pose(centrod_image, image_points)
+        centrod_image = warpImage(centrod_image, image_points)
+    
     cv2.imshow("Final", centrod_image)
+    videoWriter.write(centrod_image)
+
     cv2.waitKey(30)
+
+
+
 def main():
+
     frame_number = 1
 
     while True:
@@ -150,6 +225,7 @@ def main():
             break
         find_CCC(frame, frame_number)
         frame_number +=1
+    videoWriter.release()
 
 
 if __name__ == "__main__":
